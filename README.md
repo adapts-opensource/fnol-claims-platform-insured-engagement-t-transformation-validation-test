@@ -1,3 +1,3 @@
-# fnol-claims-platform-insured-engagement-t-transformation-validation-test
+# fnol_claims_platform_insured_engagement_tracking_transformation_validation_test_package
 
-Created by adapts-bot.
+Generated java test package.

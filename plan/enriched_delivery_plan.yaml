@@ -1,0 +1,625 @@
+capability_summary:
+  capability_id: global
+  capability_name: FNOL Claims Platform
+  operation_primary: Insured Engagement & Tracking:transformation:validation
+  business_goal: Enable fast, accurate, compliant, and auditable First Notice of Loss intake for Florida residential property claims, ensuring correct policy matching, statutory deadline preservation, proper triage routing, and seamless handoff to investigation/reserve workflows.
+  enriched_description: >
+    This capability delivers a multi-channel FNOL intake engine that normalizes loss reports, performs deterministic policy matching, validates date-of-loss against active policy periods and regulatory moratoriums, applies product/form-specific coverage rules (HO3, DP3, HW2), and triggers triage routing, task generation, and statutory clock starts. The system enforces idempotent processing, comprehensive audit trails, explainable decisioning, and configurable rule/version management to support high-volume storm events, public adjuster/attorney filings, and strict Florida insurance regulatory requirements.
+  primary_users:
+    - Claims Adjuster / Triage Analyst
+    - Agent / Broker / Customer Service Rep
+    - Back-Office Operations / Reserve Manager
+    - Rules & Configuration Administrator
+    - Compliance & Audit Reviewer
+    - Exception/Specialist Support User
+    - External Policy Administration System
+    - Data Reconciliation Process
+    - Regulatory Update Maintainer
+    - Analytics & Reporting Consumer
+  expected_business_outcomes:
+    - Reduce FNOL cycle time by 40% through automated matching, validation, and triage
+    - Achieve 99.5% policy match accuracy with clear escalation paths for ambiguous cases
+    - Ensure 100% compliance with Florida statutory deadlines and moratorium restrictions
+    - Provide full auditability and explainability for every FNOL decision
+    - Enable seamless handoff to Guidewire-style claim/incident/exposure model
+    - Support scalable intake during catastrophe events without manual bottlenecks
+
+industry_context:
+  industry_name: Property & Casualty Insurance
+  country_or_region: Florida, United States
+  relevant_domain_concepts:
+    - First Notice of Loss (FNOL)
+    - Policy Match & Coverage Determination
+    - Date-of-Loss Validation
+    - Product/Form Validation (HO3, DP3, HW2)
+    - Incident & Exposure Modeling
+    - Statutory Deadline Tracking
+    - Triage & Routing
+    - Reserve Estimation Trigger
+    - Moratorium & Catastrophe Windows
+    - Public Adjuster / Attorney Representation
+  industry_specific_workflows:
+    - Multi-channel intake (web, IVR, mobile, agent portal, broker API, public adjuster portal)
+    - Identity & policy resolution with tie-breaking logic
+    - Date-of-loss cross-reference against policy periods, cancellations, reinstatements, and storm moratoriums
+    - Form-specific validation (wind-only vs broad form, occupancy/tenant rules)
+    - Triage scoring & assignment to handling path (fast-track, complex, litigation, ALE, inspection)
+    - Task generation, acknowledgment dispatch, and statutory clock start
+    - Reserve estimation trigger and vendor assignment preparation
+  regulatory_or_policy_drivers:
+    - Florida Statutes Chapter 626 & 627 (insurance licensing, claim handling timelines)
+    - Florida Administrative Code claim processing standards
+    - Catastrophe moratorium declarations (hurricane/typhoon windows)
+    - Data privacy & consumer protection (FL Data Breach Notification, US federal baseline)
+    - Audit & examination readiness requirements
+  key_external_data_categories:
+    - Policy status & coverage details
+    - Rating & form definitions
+    - Storm event & moratorium calendars
+    - Geospatial/hazard & flood zone data
+    - Regulatory calendar & statutory deadline tables
+    - Sanctions/OFAC & fraud watchlists (optional pre-validation)
+  operational_constraints:
+    - Must handle burst volumes during named storm events
+    - Requires strict idempotency for duplicate FNOL submissions
+    - Must preserve statutory deadlines regardless of system load
+    - Must support configurable rule updates without downtime
+    - Must maintain full decision context for regulatory audits
+  terminology:
+    - term: FNOL
+      meaning: First Notice of Loss; initial report of a covered event
+    - term: Exposure
+      meaning: The specific property, coverage, or liability element impacted by the loss
+    - term: Incident
+      meaning: The event or occurrence causing the loss (e.g., wind, water, fire)
+    - term: Triage
+      meaning: Initial classification and routing of the claim based on severity, coverage, and complexity
+    - term: Moratorium
+      meaning: Temporary suspension of new claims or policy changes during a declared catastrophe
+    - term: HO3/DP3/HW2
+      meaning: Standard Florida residential property policy forms with distinct coverage scopes
+    - term: Statutory Clock
+      meaning: Regulatory timeline for investigation, reservation, or response that begins upon FNOL receipt
+
+user_stories:
+  - id: US-001
+    title: Agent/Insured submits FNOL and receives immediate acknowledgment
+    persona: Agent / Broker / Customer Service Rep
+    persona_type: primary_business_user
+    trigger: User submits multi-channel FNOL intake with policy number, risk address, loss date, and cause of loss
+    story: As an agent or insured user, I want to submit a loss report through any supported channel and receive immediate confirmation, so that I know the claim is captured and statutory deadlines are tracked.
+    business_value: Reduces caller anxiety, ensures compliance with acknowledgment SLAs, and prevents duplicate submissions.
+    priority: P0
+    preconditions:
+      - User is authenticated or provided valid contact/identity info
+      - Intake form is rendered with required fields
+      - External policy service is reachable or degraded gracefully
+    algorithm_to_be_tested:
+      name: FNOL_Intake_Normalization_And_Ack_Generation
+      purpose: Normalize inputs, validate required fields, generate unique intake ID, and trigger acknowledgment workflow
+      applies_when: User submits FNOL via any channel
+      description: Validates schema, normalizes addresses/dates, generates deterministic intake ID, persists intake shell, emits acknowledgment event
+      input_criteria:
+        required_inputs:
+          - channel_type
+          - insured_name
+          - contact_info
+          - risk_address
+          - loss_date
+          - cause_of_loss
+          - policy_number (optional)
+        optional_inputs:
+          - agent_id
+          - public_adjuster_id
+          - narrative
+          - attachments
+        input_validation:
+          - Required fields non-empty
+          - loss_date <= current_date
+          - contact_info matches regex/email/phone format
+          - risk_address normalizes to canonical format
+        freshness_requirements:
+          - Intake must be persisted within 2 seconds of submission
+      processing_steps:
+        - step: 1
+          description: Receive and parse multi-channel payload
+        - step: 2
+          description: Validate schema and required fields
+        - step: 3
+          description: Normalize address, date, and cause codes
+        - step: 4
+          description: Generate deterministic intake ID (hash of policy+address+loss_date+channel)
+        - step: 5
+          description: Persist intake shell with status: Pending Policy Match
+        - step: 6
+          description: Emit AckReceived event
+        - step: 7
+          description: Trigger acknowledgment dispatch (email/SMS/portal)
+      business_rules:
+        - Acknowledgment must be sent within 15 minutes of intake
+        - Duplicate detection must suppress duplicate acknowledgments
+        - Intake ID must be stable across retries
+      decision_points:
+        - decision: Required field missing
+          rule: Reject with specific field-level errors
+          expected_outcome: User sees validation message, intake not persisted
+        - decision: Duplicate intake detected
+          rule: Return existing intake ID, emit AckReceived again
+          expected_outcome: No duplicate shell, acknowledgment resent
+      output_criteria:
+        success_outputs:
+          - intake_id
+          - status: Pending Policy Match
+          - acknowledgment_id
+          - audit_log_id
+        failure_outputs:
+          - error_code
+          - field_errors
+          - recovery_instructions
+        status_updates:
+          - intake_status: Pending Policy Match
+        emitted_events:
+          - FNOL_AckReceived
+          - FNOL_IntakeCreated
+        user_visible_outputs:
+          - Submission confirmation screen
+          - Email/SMS acknowledgment
+          - Intake reference number
+      edge_cases:
+        - Loss date in future (requires manual review flag)
+        - Address with special characters or international format
+        - Channel disconnect during submission
+      negative_scenarios:
+        - Invalid email/phone format
+        - Missing required cause_of_loss
+        - System timeout during persistence
+      explainability_expectations:
+        - Log which fields were normalized
+        - Record duplicate detection match key
+        - Capture acknowledgment dispatch status
+      audit_evidence:
+        - Full payload hash
+        - Timestamps (receive, persist, emit)
+        - Ack dispatch result
+      sample_test_scenarios:
+        - scenario: Happy path intake
+          given: Valid payload, reachable services
+          when: Submit FNOL
+          then: Intake created, ack sent, intake_id returned
+        - scenario: Duplicate intake
+          given: Same policy+address+loss_date+channel
+          when: Submit again
+          then: Existing intake returned, no duplicate shell
+        - scenario: Missing required field
+          given: Payload missing loss_date
+          when: Submit FNOL
+          then: Validation error, no persistence
+      main_success_flow:
+        - step: 1
+          description: User submits intake
+        - step: 2
+          description: System validates and normalizes
+        - step: 3
+          description: System persists and emits events
+        - step: 4
+          description: Acknowledgment dispatched
+        alternate_flows:
+        - scenario: Duplicate detected
+          behavior: Return existing intake_id, skip persistence
+        exception_flows:
+        - scenario: Persistence failure
+          behavior: Retry with exponential backoff, return 503, log audit event
+        expected_outputs:
+          - intake_id, status, ack_id, audit_log_id
+    data_dependencies:
+      - Intake schema definition
+      - Acknowledgment template service
+      - Deduplication cache
+    audit_or_explainability_needs:
+      - Full payload hash
+      - Field validation results
+      - Ack dispatch status
+    layer_implications:
+      integration:
+        - Channel gateway adapter
+        - Acknowledgment dispatch service
+      application:
+        - Intake normalization engine
+        - Deduplication logic
+        - Event emitter
+
+  - id: US-002
+    title: System matches FNOL to active policy and resolves conflicts
+    persona: Claims Triage Analyst
+    persona_type: primary_business_user
+    trigger: Intake shell created with policy_number or risk_address
+    story: As a triage analyst, I want the system to automatically match the FNOL to the correct policy, flag multiple matches for review, and route unmatched cases to intake shell, so that coverage context is established accurately.
+    business_value: Prevents misrouting, reduces manual lookup time, ensures correct coverage application, and maintains audit trail for regulatory exams.
+    priority: P0
+    preconditions:
+      - Intake shell exists with status: Pending Policy Match
+      - Policy lookup service available
+      - Matching rules configured
+    algorithm_to_be_tested:
+      name: Policy_Match_Algorithm
+      purpose: Determine correct policy using multi-criteria matching, handle ties, and route to review or auto-assign
+      applies_when: Intake shell reaches Policy Match stage
+      description: Fetches candidate policies, scores matches, applies tie-breaking rules, creates resolve task or auto-assigns
+      input_criteria:
+        required_inputs:
+          - policy_number
+          - risk_address
+          - insured_name
+          - loss_date
+          - product_form
+          - occupancy_type
+        optional_inputs:
+          - agent_id
+          - tenant_info
+        input_validation:
+          - All required inputs present
+          - loss_date within configurable lookback window
+        freshness_requirements:
+          - Policy status must reflect current effective/expiration/cancellation dates
+      processing_steps:
+        - step: 1
+          description: Fetch candidate policies by policy_number, address, insured_name
+        - step: 2
+          description: Filter by active or recently expired status (configurable window)
+        - step: 3
+          description: Score matches: policy_number exact=100, address match=80, insured_name=60, loss_date within period=50
+        - step: 4
+          description: Apply tie-breaking: most recent effective date, highest coverage limit, occupancy match
+        - step: 5
+          description: If single match > threshold: auto-assign
+        - step: 6
+          description: If multiple matches or low score: create Resolve Policy Match task
+        - step: 7
+          description: If no match: update intake shell to Unmatched FNOL
+      business_rules:
+        - Policy must be active or expired within 30 days of loss_date
+        - Cancellation/reinstatement dates must be respected
+        - Tenant/landlord occupancy must match risk address
+        - Threshold for auto-assign: score >= 90 and no ties
+      decision_points:
+        - decision: Multiple policies match
+          rule: Create Resolve Policy Match task with candidate list
+          expected_outcome: Task assigned to triage queue, intake status: Policy Match Review
+        - decision: No policy matches
+          rule: Update shell to Unmatched FNOL
+          expected_outcome: Intake routed to manual intake review queue
+        - decision: Single match exceeds threshold
+          rule: Auto-assign policy
+          expected_outcome: Intake status: Policy Matched, proceed to Date-of-Loss Validation
+      output_criteria:
+        success_outputs:
+          - matched_policy_id
+          - match_score
+          - resolution_path (auto_assign / review / unmatched)
+          - task_id (if review)
+        failure_outputs:
+          - match_failure_code
+          - fallback_policy_ids
+        status_updates:
+          - intake_status: Policy Matched / Policy Match Review / Unmatched FNOL
+        emitted_events:
+          - PolicyMatch_Completed
+          - PolicyMatch_ReviewRequested
+          - PolicyMatch_Unmatched
+        user_visible_outputs:
+          - Matched policy summary
+          - Review task assignment
+          - Unmatched status notification
+      edge_cases:
+        - Policy cancelled but reinstated after loss_date
+        - Multiple policies with identical scores
+        - Address mismatch due to recent renovation
+      negative_scenarios:
+        - Policy service timeout
+        - Corrupted policy records
+        - Loss date exactly on cancellation date
+      explainability_expectations:
+        - Score breakdown per criterion
+        - Tie-breaking rationale
+        - Candidate policy list if review required
+      audit_evidence:
+        - Candidate policy IDs
+        - Match scores
+        - Tie-breaking inputs
+        - Resolution path
+      sample_test_scenarios:
+        - scenario: Exact policy number match
+          given: Valid policy_number, active status
+          when: Run match
+          then: Auto-assign, score 100, status Policy Matched
+        - scenario: Multiple matches
+          given: Same address, two active policies
+          when: Run match
+          then: Create Resolve task, status Policy Match Review
+        - scenario: No match
+          given: Invalid policy, stale address
+          when: Run match
+          then: Shell status Unmatched FNOL
+      main_success_flow:
+        - step: 1
+          description: Fetch candidates
+        - step: 2
+          description: Score and filter
+        - step: 3
+          description: Apply tie-breaking
+        - step: 4
+          description: Route to auto-assign, review, or unmatched
+        alternate_flows:
+        - scenario: Service timeout
+          behavior: Retry twice, then flag for manual review
+        exception_flows:
+        - scenario: Corrupted policy data
+          behavior: Skip invalid records, log audit event, proceed with valid candidates
+        expected_outputs:
+          - matched_policy_id, match_score, resolution_path, task_id
+    data_dependencies:
+      - Policy status service
+      - Match scoring config
+      - Task management system
+    audit_or_explainability_needs:
+      - Score breakdown
+      - Candidate list
+      - Tie-breaking inputs
+    layer_implications:
+      integration:
+        - Policy lookup API
+      application:
+        - Scoring engine
+        - Tie-breaking rules
+        - Task creator
+
+  - id: US-003
+    title: Date-of-loss validation against policy periods and moratoriums
+    persona: Compliance Auditor
+    persona_type: compliance_or_audit_user
+    trigger: Policy matched, loss_date available
+    story: As a compliance auditor, I need the system to validate loss_date against policy effective/expiration/cancellation/reinstatement/rewrite dates, binding restrictions, moratoriums, and storm events, so that statutory deadlines and coverage windows are enforced accurately.
+    business_value: Prevents invalid coverage grants, ensures regulatory compliance, and provides audit-ready validation evidence.
+    priority: P0
+    preconditions:
+      - Matched policy retrieved
+      - Loss date confirmed
+      - Moratorium/storm calendars loaded
+    algorithm_to_be_tested:
+      name: DateOfLoss_Validation_Algorithm
+      purpose: Validate loss_date against policy period, cancellations, reinstatements, bindings, moratoriums, and storm events
+      applies_when: Policy matched and loss_date present
+      description: Cross-references loss_date with policy dates, checks restrictions, flags out-of-period, routes to coverage review
+      input_criteria:
+        required_inputs:
+          - loss_date
+          - policy_effective_date
+          - policy_expiration_date
+          - cancellation_date
+          - reinstatement_date
+          - rewrite_date
+          - binding_restrictions
+          - moratorium_dates
+          - storm_event_dates
+        optional_inputs:
+          - jurisdiction_override_flags
+        input_validation:
+          - All dates in ISO format
+          - loss_date <= current_date
+        freshness_requirements:
+          - Moratorium/storm data refreshed daily or on declaration
+      processing_steps:
+        - step: 1
+          description: Check if loss_date within [effective_date, expiration_date]
+        - step: 2
+          description: If expired, check reinstatement_date and rewrite_date
+        - step: 3
+          description: If cancelled, verify reinstatement before loss_date
+        - step: 4
+          description: Check binding_restrictions (e.g., waiting periods)
+        - step: 5
+          description: Check moratorium_dates and storm_event_dates
+        - step: 6
+          description: If out-of-period or restricted: flag for coverage review
+        - step: 7
+          description: If valid: proceed to Product/Form Validation
+      business_rules:
+        - Loss must occur during active coverage period
+        - Cancellation does not apply if reinstated before loss
+        - Moratoriums suspend new claims but do not invalidate existing coverage windows
+        - Binding restrictions (e.g., 30-day waiting) must be respected
+      decision_points:
+        - decision: Loss outside policy period
+          rule: Flag for coverage review, preserve intake
+          expected_outcome: Status: Coverage Review Required
+        - decision: Moratorium active
+          rule: Allow intake, route to priority queue, note restriction
+          expected_outcome: Status: Moratorium Flagged
+        - decision: All checks pass
+          rule: Proceed to next validation
+          expected_outcome: Status: Date Valid
+      output_criteria:
+        success_outputs:
+          - validation_result: Valid / OutOfPeriod / Restricted / MoratoriumFlagged
+          - flagged_fields
+          - next_stage
+        failure_outputs:
+          - validation_error_code
+          - missing_date_fields
+        status_updates:
+          - intake_status: Coverage Review Required / Moratorium Flagged / Date Valid
+        emitted_events:
+          - DateValidation_Completed
+          - DateValidation_Flagged
+        user_visible_outputs:
+          - Validation status
+          - Coverage review task (if needed)
+          - Moratorium notice
+      edge_cases:
+        - Loss date exactly on cancellation date
+        - Reinstatement effective same day as loss
+        - Moratorium declared after loss but before FNOL
+      negative_scenarios:
+        - Missing reinstatement_date
+        - Storm event calendar not loaded
+        - Date format mismatch
+      explainability_expectations:
+        - Which dates were checked
+        - Why flagged
+        - Moratorium/storm references
+      audit_evidence:
+        - Date comparison results
+        - Moratorium declaration IDs
+        - Coverage review trigger reason
+      sample_test_scenarios:
+        - scenario: Valid policy period
+          given: loss_date between effective and expiration
+          when: Validate
+          then: Result Valid, proceed
+        - scenario: Out of period
+          given: loss_date after expiration, no reinstatement
+          when: Validate
+          then: Result OutOfPeriod, flag coverage review
+        - scenario: Moratorium active
+          given: loss_date in storm window
+          when: Validate
+          then: Result MoratoriumFlagged, route priority
+      main_success_flow:
+        - step: 1
+          description: Check policy period
+        - step: 2
+          description: Check cancellations/reinstatements
+        - step: 3
+          description: Check restrictions/moratoriums
+        - step: 4
+          description: Route based on result
+        alternate_flows:
+        - scenario: Missing date
+          behavior: Flag missing, request user/system input
+        exception_flows:
+        - scenario: Calendar service down
+          behavior: Cache last known, retry, flag for manual check
+        expected_outputs:
+          - validation_result, flagged_fields, next_stage
+    data_dependencies:
+      - Policy dates
+      - Moratorium/storm calendar
+      - Binding rules config
+    audit_or_explainability_needs:
+      - Date comparison logs
+      - Moratorium references
+      - Coverage review reason
+    layer_implications:
+      integration:
+        - Policy date service
+        - Moratorium calendar service
+      application:
+        - Validation engine
+        - Flag router
+
+  - id: US-004
+    title: Product/Form validation (HO3/DP3/HW2) and cause-of-loss alignment
+    persona: Claims Adjuster
+    persona_type: primary_business_user
+    trigger: Date validated, policy form identified
+    story: As an adjuster, I need the system to validate cause of loss against the policy form (HO3 broad, DP3 dwelling/rental, HW2 wind-only), so that coverage applicability and exclusions are correctly applied.
+    business_value: Prevents invalid coverage grants, ensures form-specific rules are enforced, and supports accurate triage/reserve decisions.
+    priority: P1
+    preconditions:
+      - Form type known
+      - Cause of loss identified
+      - Endorsement list available
+    algorithm_to_be_tested:
+      name: ProductForm_Validation_Algorithm
+      purpose: Align cause of loss with policy form coverage scope, apply exclusions/endorsements, and determine coverage applicability
+      applies_when: Date validated and form identified
+      description: Checks form scope, applies exclusions, evaluates endorsements, flags non-covered causes
+      input_criteria:
+        required_inputs:
+          - policy_form (HO3, DP3, HW2)
+          - cause_of_loss
+          - endorsements
+          - occupancy_type
+        optional_inputs:
+          - rental_status
+          - flood_zone_flag
+        input_validation:
+          - Form in allowed list
+          - Cause of loss in cause codes
+        freshness_requirements:
+          - Form definitions current per rating cycle
+      processing_steps:
+        - step: 1
+          description: Retrieve form coverage scope
+        - step: 2
+          description: Check cause against covered perils
+        - step: 3
+          description: Apply exclusions (e.g., flood, earthquake, wear/tear)
+        - step: 4
+          description: Evaluate endorsements (e.g., wind deductible, equipment breakdown)
+        - step: 5
+          description: If HW2 and cause != wind: flag non-covered
+        - step: 6
+          description: If DP3 and occupancy != rental: flag review
+        - step: 7
+          description: Output coverage applicability and next actions
+      business_rules:
+        - HO3 covers broad perils unless excluded
+        - DP3 focuses on dwelling; occupancy/rental questions critical
+        - HW2 covers wind only; non-wind causes require separate coverage
+        - Endorsements modify standard exclusions
+      decision_points:
+        - decision: Cause not covered by form
+          rule: Flag non-covered, route to denial review or separate coverage check
+          expected_outcome: Status: Coverage Exclusion
+        - decision: Endorsement changes deductible
+          rule: Update reserve estimate trigger
+          expected_outcome: Status: Endorsement Applied
+        - decision: All checks pass
+          rule: Proceed to triage
+          expected_outcome: Status: Form Valid
+      output_criteria:
+        success_outputs:
+          - coverage_applicability
+          - applicable_endorsements
+          - deductible_adjustment
+          - next_stage
+        failure_outputs:
+          - exclusion_code
+          - non_covered_cause
+        status_updates:
+          - intake_status: Coverage Exclusion / Endorsement Applied / Form Valid
+        emitted_events:
+          - FormValidation_Completed
+          - FormValidation_Excluded
+        user_visible_outputs:
+          - Coverage summary
+          - Deductible notice
+          - Exclusion alert
+      edge_cases:
+        - Hybrid form with endorsements
+        - Cause code ambiguity
+        - Recent form rewrite
+      negative_scenarios:
+        - Missing endorsement list
+        - Invalid cause code
+        - Form definition outdated
+      explainability_expectations:
+        - Form scope reference
+        - Exclusion rationale
+        - Endorsement impact
+      audit_evidence:
+        - Form version
+        - Cause mapping
+        - Exclusion/endorsement decisions
+      sample_test_scenarios:
+        - scenario: HO3 wind cause
+          given: HO3, wind cause
+          when: Validate
+          then: Coverage applicable, proceed
+        - scenario: HW2 water cause
+          given: HW2, water cause
+          when: Validate
+          then: Flag non-covered, route exclusion
+        - scenario: DP3 rental mismatch
+          given: DP3, non-rental occupancy
